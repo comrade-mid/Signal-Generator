@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
-// Engineer: Adam Shanta
+// Engineer: Adam Shanta, Ocean Hurd, Nemo Thompson
 // 
 // Create Date:    17:00:28 05/30/2019 
 // Design Name: 
@@ -21,7 +21,7 @@
 module lab5(output SDATA_OUT,
 				output RESET,
 				output SYNC,
-				output [1:0] led,
+				output [3:0] led,
 				output [4:1] JA,
 				
 				input  [3:0] sw,
@@ -33,33 +33,43 @@ module lab5(output SDATA_OUT,
 				input  BIT_CLK
 				//input  SQ_WAVE 
 				);
-wire reset, squareFq;
+wire reset, squareFq, btnRDe, btnLDe, frame;
 wire [7:0] bitCount;
-wire [10:0] frameCount;
-wire [1:0] phase;
+wire [10:0] frameCount, frameMax;
 wire [19:0] wave;
+
+d_bounce_edge btnRD (.sig(btnRDe), .btn(btnR), .clk(BIT_CLK));
+d_bounce_edge btnLD (.sig(btnLDe), .btn(btnL), .clk(BIT_CLK));
 
 assign reset = RESET;
 assign led[0] = BIT_CLK;
 assign led[1] = SYNC;
-assign JA[1] = SDATA_OUT;				// for oscope testing
+assign led[2] = btnRDe;
+assign led[3] = btnLDe;
+assign JA[1] = wave;				// for oscope testing
 assign JA[2] = SYNC;						// "   "      "
 assign JA[3] = BIT_CLK;					// "   "      "
 //assign JA[4] = squareFq;				// "   "      "
 
 AC ac (.sync(SYNC), .sdata(SDATA_OUT), .reset(RESET), .wave(wave), .bitCount(bitCount), .BIT_CLK(BIT_CLK), .gclk(gclk), .resetFlag(reset));
-bitFrameCount bitFrame (.bitCountOut(bitCount), .frameCountOut(frameCount), .resetFlag(reset), .BIT_CLK(BIT_CLK));
-Waveforms waveData (.waveOut(wave), .frameCount(frameCount));
+bitFrameCount bitFrame (.bitCountOut(bitCount), .frameCountOut(frameCount), .frameMax(frameMax), .frameFlag(frame), .resetFlag(reset), .btnR(btnRDe), .btnL(btnLDe), .BIT_CLK(BIT_CLK));
+Waveforms waveData (.waveOut(wave), .waveIn(wave), .frameMax(frameMax), .frameCount(frameCount), .sw(sw), .frame(frame), .BIT_CLK(BIT_CLK));
 				
 endmodule
 
-module bitFrameCount (output reg [7:0] bitCountOut,
+module bitFrameCount (output reg [7:0]  bitCountOut,
 							 output reg [10:0] frameCountOut,
+							 output reg [10:0] frameMax,
+							 output reg        frameFlag,
 							 input             resetFlag,
+							 input             btnR,
+							 input             btnL,
 							 input             BIT_CLK);
 							 
 reg [7:0] bitCount = 8'd0;
 reg [10:0] frameCount = 11'd0;
+reg [10:0] frameMaxConst = 11'd479;
+reg [4:0] freqCount = 5'd10;
 
 always @ (posedge BIT_CLK) begin
 	if (bitCount == 8'd255) begin
@@ -67,20 +77,63 @@ always @ (posedge BIT_CLK) begin
 			frameCount <= frameCount + 1'b1;
 			bitCount <= 8'd0;
 		end
-		else
+		else begin
 			bitCount <= 8'd0;
+		end
+		frameFlag <= 1'b1;
 	end
 	else begin
 		bitCount <= bitCount + 1'b1;
+		frameFlag <= 1'b0;
 	end
 
-	if (frameCount == 11'd479)
+	if (frameCount == frameMaxConst)
 			frameCount <= 11'd0;
+			
+	if (btnR && ~btnL) begin
+		if (freqCount < 5'd20)
+			freqCount <= freqCount + 1'b1;
+		else
+			freqCount <= 5'd20;
+	end
+	if (btnL && ~ btnR) begin
+		if (freqCount > 5'd1)
+			freqCount <= freqCount - 1'b1;
+		else
+			freqCount <= 5'd1;	
+	end
 end
 
 always @ (*) begin
+	case (freqCount)
+		5'd0: frameMaxConst = 11'd2;
+		5'd1: frameMaxConst = 11'd2;
+		5'd2: frameMaxConst = 11'd4;
+		5'd3: frameMaxConst = 11'd6;
+		5'd4: frameMaxConst = 11'd8;
+		5'd5: frameMaxConst = 11'd10;
+		5'd6: frameMaxConst = 11'd12;
+		5'd7: frameMaxConst = 11'd14;
+		5'd8: frameMaxConst = 11'd20;
+		5'd9: frameMaxConst = 11'd24;
+		5'd10: frameMaxConst = 11'd32;
+		5'd11: frameMaxConst = 11'd40;
+		5'd12: frameMaxConst = 11'd54;
+		5'd13: frameMaxConst = 11'd70;
+		5'd14: frameMaxConst = 11'd90;
+		5'd15: frameMaxConst = 11'd118;
+		5'd16: frameMaxConst = 11'd154;
+		5'd17: frameMaxConst = 11'd200;
+		5'd18: frameMaxConst = 11'd260;
+		5'd19: frameMaxConst = 11'd338;
+		5'd20: frameMaxConst = 11'd438;
+		5'd21: frameMaxConst = 11'd438;
+		default: frameMaxConst = 11'd32;
+	endcase
+	
 	bitCountOut = bitCount;
 	frameCountOut = frameCount;
+	frameMax = frameMaxConst;
 end
 							 
 endmodule
@@ -140,7 +193,7 @@ always @ (*) begin
 			hardcode[219:200] = {20'b10000000000000000000};
 			hardcode[199:0] = {200'd0};
 			end*/
-		else begin					// 240 frames for 100Hz Square Wave
+		else begin 					// 240 frames for 100Hz Square Wave
 			// After High
 			hardcode[255:240] = {5'b11011,11'd0};
 			//hardcode[239:220] = {1'b1,7'h18,12'd0};			// doesn't matter what is in slot 1 here, reading data
