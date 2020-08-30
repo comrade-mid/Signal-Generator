@@ -63,19 +63,9 @@ module lab5_test;
 		BIT_CLK = 0;
 		
 		// Wait 100 ns for global reset to finish
-		#400;
+		#100;
         
 		// Add stimulus here
-		btnR = 1'b1;
-		#300 btnR = 1'b0;
-		#100 btnL = 1'b1;
-		#300 btnL = 1'b0;
-		#200
-		
-		btnR = 1'b1;
-		#300 btnR = 1'b0;
-		#100 btnL = 1'b1;
-		#300 btnL = 1'b0;
 	end
 	
 		always #81.3802083 BIT_CLK <= ~BIT_CLK;
